@@ -1,4 +1,4 @@
 # tellico-scripts
 
 Scripts on this repository:
-- Bertrand Livreiros Website (bertrand.pt) - Book Database - bertrand.py
+- bertrand.py [Bertrand Livreiros Website (bertrand.pt) - Book Database]
