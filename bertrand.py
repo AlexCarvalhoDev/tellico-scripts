@@ -25,15 +25,16 @@
 # *                                                                         *
 # ***************************************************************************
 
-# bertrand.py 12-3-2018, 15h16 - alexcarvalho.pt 
+# bertrand.py 12-3-2018 - alexcarvalho.pt 
 # script developed with help of dark horse comics script for tellico
-# $Id: bertrand.py,v 1.9 2018/08/26 18:30:36 njsg Exp njsg $
+# by Alexandre Carvalho <alexandre.carvalho.ipe@gmail.com>
+# fixed and improved by Nuno Silva <njsg@iki.fi>
 
 """
 This script has to be used with tellico (http://periapsis.org/tellico) as an external data source program.
 It allows searching through the Bertrand website.
 
-Related info and cover are fetched automatically. It takes only one argument (comic title).
+Related info and cover are fetched automatically. It takes only one argument (book title).
 
 Tellico data source setup:
 - source name: Bertrand Livreiros (or whatever you want :)
@@ -51,6 +52,7 @@ Update (checked) = %{title}
 # -*- coding: utf-8 -*-
 
 import sys, os
+
 # This requires python 2
 if sys.version_info[:2] > (2, 7):
 	try:
@@ -59,7 +61,6 @@ if sys.version_info[:2] > (2, 7):
 	except FileNotFoundError:
 		# Idem, se o Python 2.7 estiver instalado como python2.7
 		os.execvpe('python2.7', ['python2.7'] + sys.argv, os.environ)
-
 
 import re, md5, random, string
 import urllib, urllib2, time, base64
