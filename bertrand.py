@@ -27,11 +27,11 @@
 
 # bertrand.py 12-3-2018, 15h16 - alexcarvalho.pt 
 # script developed with help of dark horse comics script for tellico
-# $Id: comics_darkhorsecomics.py 123 2006-03-24 08:47:48Z mathias $
+# $Id: bertrand.py,v 1.9 2018/08/26 18:30:36 njsg Exp njsg $
 
 """
 This script has to be used with tellico (http://periapsis.org/tellico) as an external data source program.
-It allows searching through the Bertrand Comics website.
+It allows searching through the Bertrand website.
 
 Related info and cover are fetched automatically. It takes only one argument (comic title).
 
@@ -50,7 +50,18 @@ Update (checked) = %{title}
 # encoding: win-1252
 # -*- coding: utf-8 -*-
 
-import sys, os, re, md5, random, string
+import sys, os
+# This requires python 2
+if sys.version_info[:2] > (2, 7):
+	try:
+		# se o python27 estiver instalado no sistema o script e executado com o python27
+		os.execvpe('python27', ['python27'] + sys.argv, os.environ)
+	except FileNotFoundError:
+		# Idem, se o Python 2.7 estiver instalado como python2.7
+		os.execvpe('python2.7', ['python2.7'] + sys.argv, os.environ)
+
+
+import re, md5, random, string
 import urllib, urllib2, time, base64
 import xml.dom.minidom
 
@@ -60,9 +71,9 @@ NULLSTRING = ''
 
 VERSION = "0.2"
 
-
-if sys.version_info[:2] > (2, 7): # verificacao se o python27 esta instalado no sistema
-    os.execve('python27', sys.argv, os.environ) # se o python27 estiver instalado no sistema o script e executado com o python27
+# Sometimes, results span several pages. While it is technically
+# possible to retrieve all of them, we stop after MAX_SEARCH_PAGES.
+MAX_SEARCH_PAGES = 5
 
 def genMD5():
 	"""
@@ -115,7 +126,7 @@ class BasicTellicoDOM:
 		entryNode.setAttribute('id', str(self.__currentId))
 
 		titleNode = self.__doc.createElement('title')
-		titleNode.appendChild(self.__doc.createTextNode(unicode(d['title'], 'latin-1').encode('utf-8')))
+		titleNode.appendChild(self.__doc.createTextNode(d['title']))
 		entryNode.appendChild(titleNode)
 
 		yearNode = self.__doc.createElement('pub_year')
@@ -135,7 +146,7 @@ class BasicTellicoDOM:
 		authorsNode = self.__doc.createElement('authors')
 		for g in d['author']:
 			authorNode = self.__doc.createElement('author')
-			authorNode.appendChild(self.__doc.createTextNode(unicode(g, 'latin-1').encode('utf-8')))
+			authorNode.appendChild(self.__doc.createTextNode(g))
 			authorsNode.appendChild(authorNode)
 			entryNode.appendChild(authorsNode)
 
@@ -143,15 +154,15 @@ class BasicTellicoDOM:
 		if 'genre' in d:
 			for g in d['genre']:
 				genreNode = self.__doc.createElement('genre')
-				genreNode.appendChild(self.__doc.createTextNode(unicode(g, 'latin-1').encode('utf-8')))
+				genreNode.appendChild(self.__doc.createTextNode(g))
 				genresNode.appendChild(genreNode)
 			entryNode.appendChild(genresNode)
 
 		commentsNode = self.__doc.createElement('comments')
 		#for g in d['comments']:
-		#	commentsNode.appendChild(self.__doc.createTextNode(unicode("%s\n\n" % g, 'latin-1').encode('utf-8')))
+		#	commentsNode.appendChild(self.__doc.createTextNode("%s\n\n" % g))
 		commentsData = string.join(d['comments'], '\n\n')
-		commentsNode.appendChild(self.__doc.createTextNode(unicode(commentsData, 'latin-1').encode('utf-8')))
+		commentsNode.appendChild(self.__doc.createTextNode(commentsData))
 		entryNode.appendChild(commentsNode)
 
 		if 'pages' in d:
@@ -168,7 +179,7 @@ class BasicTellicoDOM:
 			imageNode = self.__doc.createElement('image')
 			imageNode.setAttribute('format', 'JPEG')
 			imageNode.setAttribute('id', d['image'][0])
-			imageNode.appendChild(self.__doc.createTextNode(unicode(d['image'][1], 'latin-1').encode('utf-8')))
+			imageNode.appendChild(self.__doc.createTextNode(d['image'][1]))
 			self.__images.appendChild(imageNode)
 
 			coverNode = self.__doc.createElement('cover')
@@ -185,17 +196,17 @@ class BasicTellicoDOM:
 		Prints entry's XML content to stdout
 		"""
 		try:
-			print nEntry.toxml()
+			print(nEntry.toxml())
 		except:
-			print sys.stderr, "Error while outputting XML content from entry to Tellico"
+			sys.stderr.write("Error while outputting XML content from entry to Tellico\n")
 
 	def printXMLTree(self):
 		"""
 		Outputs XML content to stdout
 		"""
 		self.__collection.appendChild(self.__images)
-		print XML_HEADER; print DOCTYPE
-		print self.__root.toxml()
+		print(XML_HEADER); print(DOCTYPE)
+		print(self.__root.toxml())
 
 
 class DarkHorseParser:
@@ -210,7 +221,7 @@ class DarkHorseParser:
 		self.__regExps = {
 
 							'title' 				: '<div class="right-title-details" id="productPageSectionDetails-collapseDetalhes-content-title">(?P<title>.*?)</div>',
-							'author'				: '<div class="right-author" id="productPageSectionDetails-collapseDetalhes-content-author">(?P<author>.*?)</div>',
+							'author'				: '<div class="right-author" id="productPageSectionDetails-collapseDetalhes-content-author">(?:de )?(?P<author>.*?)(?:&nbsp;)?</div>',
 							'publisher'				: '<span itemprop="name" class="info">(?P<publisher>.*?)</span>',
 							'pub_date'				: '<span itemprop="datePublished" class="info">(?P<pub_date>.*?)</span>',
 							'isbn'					: '<span itemprop="isbn" class="info">(?P<isbn>.*?)</span>',
@@ -243,6 +254,17 @@ class DarkHorseParser:
 		self.__data = u.read()
 		u.close()
 
+	def __getSearchHTMLContent(self, searchText, pageNumber):
+		"""
+		Fetch search results from the given "results page"
+		"""
+		postData = urllib.urlencode({'pagina' : pageNumber,
+					      'palavra' : urllib.quote(searchText)})
+		baseUrl = 'https://www.bertrand.pt/pesquisando/'
+		resultsPage = urllib2.urlopen(baseUrl, postData)
+		self.__data = resultsPage.read()
+		resultsPage.close()
+
 	def __fetchMovieLinks(self):
 		"""
 		Retrieve all links related to the search. self.__data contains HTML content fetched by self.__getHTMLContent()
@@ -268,7 +290,7 @@ class DarkHorseParser:
 			f.write(img)
 			f.close()
 		except:
-			print sys.stderr, "Error: could not write image into /tmp"
+			sys.stderr.write("Error: could not write image into /tmp\n")
 
 		b64data = (md5 + '.jpeg', base64.encodestring(img))
 
@@ -277,7 +299,7 @@ class DarkHorseParser:
 			try:
 				os.remove(imgPath)
 			except:
-				print sys.stderr, "Error: could not delete temporary image /tmp/%s.jpeg" % md5
+				sys.stderr.write("Error: could not delete temporary image /tmp/%s.jpeg\n" % md5)
 
 		return b64data
 
@@ -290,6 +312,7 @@ class DarkHorseParser:
 		matches = {}
 		data = {}
 		data['comments'] = []
+		data['comments'].insert(0, "Bertrand URL: %s" % url)
 
 		# Default values
 		data['publisher'] 	= 'Bertrand'
@@ -341,12 +364,48 @@ class DarkHorseParser:
 					data['comments'].append(matches[name][max].strip())
 
 				elif name == 'author':
-					# We may find several authors
+					# The Bertrand website is not
+					# consistent regarding how the
+					# list of authors is written.
+					#
+					# Sometimes, each author is a
+					# link to a separate
+					# page, sometimes not.
+					#
+					# If there is more than one
+					# link in the list of authors,
+					# the list is split based on
+					# that. Otherwise, we split
+					# based on ";". If that does
+					# not split, we split on
+					# ',' and '�e�'.
 					data[name] = []
-					authorsList = re.sub('</?a.*?>', '', matches[name].group('author')).split(',')
-					for d in authorsList:
-						data[name].append(d.strip())\
+					authorsUnsplit = re.sub('</?a.*?>', '',
+								     matches[name].group('author'))
+					authorsByLinks = re.findall("<a[^>]*>([^<]*)</a>",
+								    matches[name].group('author'),
+								    re.S|re.I)
+					authorsList = authorsUnsplit.split(';')
+					if len(authorsList) < 2:
+						authorsList = re.split("(?: e )|,", authorsUnsplit)
 
+					if len(authorsByLinks) > 1:
+						for author in authorsByLinks:
+							data[name].append(author.strip())
+					else:
+						for author in authorsList:
+							data[name].append(author.strip())
+					
+					# Something might go wrong.
+					# For example, if one author
+					# has a link, and another one
+					# does not.  To help the user
+					# when this happens, the
+					# original content of this
+					# field is saved, without
+					# links, in the comments
+					# field.
+					data['comments'].insert(0, "Lista de autores: %s" % authorsUnsplit.strip())
 				elif name == 'genre':
 					# We may find several genres
 					data[name] = []
@@ -367,29 +426,33 @@ class DarkHorseParser:
 		if not len(title): return
 
 		self.__title = title
-		self.__getHTMLContent("%s%s" % (self.__baseURL, self.__searchURL % urllib.quote(self.__title)))
+		page = 1
 
-		# Get all links
-		links = self.__fetchMovieLinks()
+		while page <= MAX_SEARCH_PAGES:
+			self.__getSearchHTMLContent(self.__title, page)
+			page += 1
+			# Get all links
+			links = self.__fetchMovieLinks()
 
-		# Now retrieve info
-		if links:
-			for entry in links:
-				data = self.__fetchMovieInfo( url = self.__baseURL + entry )
-				# Add DC link (custom field)
-				data['bertrand'] = "%s%s" % (self.__baseURL, entry)
-				node = self.__domTree.addEntry(data)
-				# Print entries on-the-fly
-				#self.__domTree.printEntry(node)
-		else:
-			return None
+			# Now retrieve info
+			if links:
+				for entry in links:
+					data = self.__fetchMovieInfo( url = self.__baseURL + entry )
+					# Add DC link (custom field)
+					data['bertrand'] = "%s%s" % (self.__baseURL, entry)
+					node = self.__domTree.addEntry(data)
+					# Print entries on-the-fly
+					#self.__domTree.printEntry(node)
+			else:
+				# No more results, leave the loop.
+				break
 
 def halt():
-	print "HALT."
+	print("HALT.")
 	sys.exit(0)
 
 def showUsage():
-	print "Usage: %s comic" % sys.argv[0]
+	print("Usage: %s comic" % sys.argv[0])
 	sys.exit(1)
 
 def main():
