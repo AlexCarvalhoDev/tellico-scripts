@@ -25,16 +25,15 @@
 # *                                                                         *
 # ***************************************************************************
 
-# bertrand.py 12-3-2018 - alexcarvalho.pt 
+# bertrand.py 12-3-2018, 15h16 - alexcarvalho.pt 
 # script developed with help of dark horse comics script for tellico
-# by Alexandre Carvalho <alexandre.carvalho.ipe@gmail.com>
-# fixed and improved by Nuno Silva <njsg@iki.fi>
+# $Id: bertrand.py,v 1.14 2018/09/09 09:40:44 njsg Exp njsg $
 
 """
 This script has to be used with tellico (http://periapsis.org/tellico) as an external data source program.
-It allows searching through the Bertrand website.
+It allows searching through the Bertrand Comics website.
 
-Related info and cover are fetched automatically. It takes only one argument (book title).
+Related info and cover are fetched automatically. It takes only one argument (comic title).
 
 Tellico data source setup:
 - source name: Bertrand Livreiros (or whatever you want :)
@@ -47,12 +46,9 @@ Update (checked) = %{title}
 """
 
 # encoding: utf-8
-# encoding: iso-8859-1
-# encoding: win-1252
 # -*- coding: utf-8 -*-
 
 import sys, os
-
 # This requires python 2
 if sys.version_info[:2] > (2, 7):
 	try:
@@ -61,6 +57,7 @@ if sys.version_info[:2] > (2, 7):
 	except FileNotFoundError:
 		# Idem, se o Python 2.7 estiver instalado como python2.7
 		os.execvpe('python2.7', ['python2.7'] + sys.argv, os.environ)
+
 
 import re, md5, random, string
 import urllib, urllib2, time, base64
@@ -140,6 +137,17 @@ class BasicTellicoDOM:
 		pubNode = self.__doc.createElement('publisher')
 		pubNode.appendChild(self.__doc.createTextNode(d['publisher']))
 		entryNode.appendChild(pubNode)
+
+		plotSummaryNode = self.__doc.createElement('plot')
+		if d['plot_summary']:
+			plotSummaryNode.appendChild(self.__doc.createTextNode(d['plot_summary'] + '<br/>'))
+		for i,review in enumerate(d['reviews']):
+			review_entry = ('<b>Cr&iacute;tica #%d</b>' % (i + 1))
+			review_entry += ('<p>%s</p><br/>' % review)
+			plotSummaryNode.appendChild(self.__doc.createTextNode(review_entry))
+		if d['plot_summary'] or d['reviews']:
+			entryNode.appendChild(plotSummaryNode)
+
 		langNode = self.__doc.createElement('language')
 		langNode.appendChild(self.__doc.createTextNode(d['language']))
 		entryNode.appendChild(langNode)
@@ -162,7 +170,7 @@ class BasicTellicoDOM:
 		commentsNode = self.__doc.createElement('comments')
 		#for g in d['comments']:
 		#	commentsNode.appendChild(self.__doc.createTextNode("%s\n\n" % g))
-		commentsData = string.join(d['comments'], '\n\n')
+		commentsData = string.join(d['comments'], '<br/><br/>')
 		commentsNode.appendChild(self.__doc.createTextNode(commentsData))
 		entryNode.appendChild(commentsNode)
 
@@ -224,6 +232,8 @@ class DarkHorseParser:
 							'title' 				: '<div class="right-title-details" id="productPageSectionDetails-collapseDetalhes-content-title">(?P<title>.*?)</div>',
 							'author'				: '<div class="right-author" id="productPageSectionDetails-collapseDetalhes-content-author">(?:de )?(?P<author>.*?)(?:&nbsp;)?</div>',
 							'publisher'				: '<span itemprop="name" class="info">(?P<publisher>.*?)</span>',
+							'plot_summary' 				: '<div itemprop="description" class="right-text" id="productPageSectionAboutBook-sinopse">(?P<plot_summary>.*?)</div>',
+							'reviews' 				: '<div itemprop="description" class="right-text" id="productPageSectionPressCriticism-comment">(?P<reviews>.*?)</div>',
 							'pub_date'				: '<span itemprop="datePublished" class="info">(?P<pub_date>.*?)</span>',
 							'isbn'					: '<span itemprop="isbn" class="info">(?P<isbn>.*?)</span>',
 							'pages'					: '<span itemprop="numberOfPages" class="info">(?P<pages>.*?)</span>',
@@ -326,6 +336,8 @@ class DarkHorseParser:
 			data[name] = NULLSTRING
 			if name == 'desc':
 				matches[name] = re.findall(self.__regExps[name], self.__data, re.S | re.I)
+			elif name == 'reviews':
+				matches[name] = re.findall(self.__regExps[name], self.__data, re.S | re.I)
 			else:
 				matches[name] = po.search(self.__data)
 
@@ -348,6 +360,11 @@ class DarkHorseParser:
 					publisher = matches[name].group('publisher').strip()
 					data[name] = publisher
 
+				elif name == 'plot_summary':
+					plot_summary = matches[name].group('plot_summary')
+					data[name] = plot_summary
+				elif name == 'reviews':
+					data['reviews'] = matches[name]
 				elif name == 'language':
 					language = matches[name].group('language').strip()
 					data[name] = language
